@@ -1,0 +1,353 @@
+---
+title: 'Implementing Google reCAPTCHA v2 in Phoenix Framework'
+date: '2022-01-29'
+tags: ['recaptcha', 'phoenix', 'live-view']
+authors: ['nittin']
+---
+
+The full form of **CAPTCHA** is _Completely Automated Public Turing Test to tell Computers and Humans Apart_.
+
+It is implemented by web developers in their websites to avoid phising attacks. Google ReCAPTCHA remains to be a popular choice among the developers as it's easy to implement and also majority of the users are quite adapted to it. You may read more about it [here](https://www.google.com/recaptcha/about/).
+
+There are four different types of reCAPTCHA:
+
+1.  reCAPTCHA v3 - Validates requests in the background by assigning scores. The end user doesn't see anything
+2.  reCAPTCHA v2 "I'm not a robot" Checkbox - Challenges the users to do some mini challenges
+3.  reCAPTCHA v2 invisible badge - Validates request in the background and a small badge is visible in the form.
+4.  reCAPTCHA v2 Android - Used for implementation in Android
+
+In this article, we are going to implement Google reCAPTCHA v2 with the checkbox using Phoenix Liveview.
+
+## [](#building-the-form)Building the form
+
+Before doing anything else, we first need to create a liveview to display our form.
+
+In `router.ex`, let's comment out the default `get/3` function generated and add in a new liveview to route to.
+
+```
+    scope "/", DemoWeb do
+      pipe_through :browser
+
+      # get "/", PageController, :index
+      live "/", PageLive
+    end
+```
+
+Let's now create the live view which shows a simple hero section in `lib/demo_web/live/page_live.ex`:
+
+```
+    defmodule DemoWeb.PageLive do
+      use DemoWeb, :live_view
+
+      def render(assigns) do
+        ~H"""
+        <section>
+          <div class="phx-hero">
+            <h1>Welcome to this demo site!</h1>
+            <p>You'll see the implementaion of Google reCAPTCHA with live view this page</p>
+          </div>
+        </section>
+        <section>
+          Form will come here
+        </section>
+        """
+      end
+
+      def mount(_params, _session, socket) do
+        {:ok, socket}
+      end
+
+      def handle_params(_params, _session, socket) do
+        {:noreply, socket}
+      end
+    end
+```
+
+To build a form in Phoenix, we require an Ecto changeset to manage server-side validations and to track errors. As we all know, a changeset requires a schema. In our case, we don't need to store anything in the database, so let's just create an embedded schema at `lib/demo/contact_schema.ex`:
+
+```
+    defmodule Demo.ContactSchema do
+      use Ecto.Schema
+      import Ecto.Changeset
+
+      embedded_schema do
+        field :subject, :string
+        field :name, :string
+        field :email, :string
+        field :contact_number, :string
+        field :message, :string
+      end
+
+      @doc false
+      def changeset(contact, attrs \\ %{}) do
+        contact
+        |> cast(attrs, [:subject, :name, :email, :contact_number, :message])
+        |> validate_required([:subject, :name, :email, :contact_number, :message])
+      end
+    end
+```
+
+Let's build our form in a live component under `lib/demo_web/live/contact_form_component.ex`. What we have below, is just a normal form built with the help of Phoenix helper functions and changeset for error tracking:
+
+```
+    defmodule DemoWeb.ContactFormComponent do
+      use DemoWeb, :live_component
+
+      def render(assigns) do
+        ~H"""
+        <div>
+          <.form let={f}
+          for={@changeset}
+          phx-target={@myself}
+          phx-submit="send-email">
+            <%= label f, :subject %>
+            <%= text_input f, :subject %>
+            <%= error_tag f, :subject %>
+
+            <%= label f, :name %>
+            <%= text_input f, :name %>
+            <%= error_tag f, :name %>
+
+            <%= label f, :email %>
+            <%= email_input f, :email %>
+            <%= error_tag f, :email %>
+
+            <%= label f, :contact_number %>
+            <%= text_input f, :contact_number %>
+            <%= error_tag f, :contact_number %>
+
+            <%= label f, :message %>
+            <%= textarea f, :message %>
+            <%= error_tag f, :message %>
+
+            <%= submit "Submit", class: "button-primary" %>
+          </.form>
+        </div>
+        """
+      end
+
+      def handle_event("send-email", %{"contact_schema" => contact_schema_attrs}, socket) do
+        changeset =
+          Demo.ContactSchema.changeset(%Demo.ContactSchema{}, contact_schema_attrs)
+          |> Map.put(:action, :validate)
+
+        if changeset.valid? do
+          #
+          # Some actions that you can do like sending an email
+          #
+
+          {:noreply,
+           push_patch(socket, to: "/", replace: true)
+           |> put_flash(:info, "Email sent")}
+        else
+          {:noreply, assign(socket, :changeset, changeset)}
+        end
+      end
+
+      def mount(socket) do
+        changeset = Demo.ContactSchema.changeset(%Demo.ContactSchema{}, %{})
+        {:ok, assign(socket, :changeset, changeset)}
+      end
+    end
+```
+
+Now that we have our form ready, let's now render it in `page_live.ex`
+
+```
+    <.live_component module={DemoWeb.ContactFormComponent} id="contact-form-component" />
+```
+
+## [](#displaying-the-im-not-a-robot-checkbox)Displaying the _I'm not a robot checkbox_
+
+Before proceeding to do any steps, let's first generate the public and secret keys from Google reCAPTCHA admin console. You can find the page to do it [here](https://www.google.com/recaptcha/admin/create). Please make sure to select v2 Checkbox and to add localhost as one of your host.
+
+Inside the `lib/demo_web/layouts/root.html.heex`, we need to add the script tag inside the `head` tag to access functions to render the checkbox:
+
+```
+    <script src="https://www.google.com/recaptcha/api.js?render=explicit"></script>
+```
+
+Inside our `lib/demo_web/live/contact_form_component.ex`, let's add in a `<div>` tag as a placeholder for our checkbox. We'll use the hook for calling a JS function to render the checkbox. We are required to put our reCAPTCHA public key inside the `data-sitekey` attribute. Let's add it just above our submit button.
+
+```
+    <div phx-hook="GoogleRecaptcha" id="captcha-placeholder" data-sitekey="YOUR_PUBLIC_KEY"></div>
+
+    <%= submit "Submit", class: "button-primary" >
+```
+
+Now, inside our `app.js`, if we had our hook render out the checkbox, we'd have it in the page. We do that like this:
+
+```
+    let Hooks = {}
+
+    Hooks.GoogleRecaptcha = {
+      mounted() {
+        grecaptcha.render(this.el.id)
+      }
+    }
+
+    let liveSocket = new LiveSocket("/live", Socket, {hooks: Hooks, ...})
+```
+
+We can see the checkbox in our form now, Voila!!
+
+![Local form made in this page](/static/images/google-recaptcha-article/local-form.png)
+
+But if we purposefuly induce an error with the form, we may note that the checkbox being missing. This is because, in our hook, we're only calling the `grecaptcha.render(this.el.id)` within `mounted()`. We aren't calling any function when the page is getting updated(like when an error occurs withing the form and the page needs to be updated). Let's now update the hook in `app.js` such that the checkbox will always be visbile.
+
+```
+    Hooks.GoogleRecaptcha = {
+      mounted() {
+        grecaptcha.render(this.el.id)
+      },
+      updated() {
+        grecaptcha.reset()
+      },
+    }
+```
+
+## [](#validating-users-response)Validating user's response
+
+The checkbox that we have currently have now serves no real purpose. It's stationary. The value is not being checked for submission of the form.
+
+If you inspect the params you receive after sumbitting the form, you may notice that there is an additional key in params with the name of `"g-recaptcha-response"`. This is the user response token provided by Google reCAPTCHA as a POST parameter when the user submits the form.
+
+Now, we need to send an API request to Google reCAPTCHA with this token and API secret key. To make HTTP requests, I prefer to use the external library Tesla. Please view this [link](https://github.com/teamon/tesla) to read more about Tesla.
+
+Inside `mix.exs`, we add the following line and run `mix deps.get` to install Tesla.
+
+```
+    defp deps do
+      [
+        {:tesla, "~> 1.4"}
+      ]
+    end
+```
+
+Before proceeding to start making API requests, let's first have our secret API key inside `config/dev.secret.exs`:
+
+```
+    import Config
+
+    # Configurations for Google reCATCHA
+    config :demo, :google_recaptcha,
+      secret: "YOUR SECRET"
+```
+
+Please note that we need to add this below line to import the secret configurations.
+
+```
+    import_config "dev.secret.exs"
+```
+
+Let's now create a client module for making API requests to Google reCAPTCHA at `lib/demo/google_recaptcha.ex`:
+
+```
+    defmodule Demo.GoogleRecaptcha do
+      use Tesla
+
+      plug {Tesla.Middleware.BaseUrl, "https://www.google.com"}
+      plug Tesla.Middleware.FormUrlencoded
+      plug Tesla.Middleware.JSON
+
+      def verify(resp) do
+        request_body = %{secret: get_secret(), response: resp}
+        {:ok, %Tesla.Env{body: body}} = post("/recaptcha/api/siteverify", request_body)
+        body
+      end
+
+      # Take a note of this function
+      defp get_secret() do
+        config = Application.get_env(:demo, :google_recaptcha)
+        config[:secret]
+      end
+    end
+```
+
+I normally prefer to have all configurations at one place like `config/dev.secret.exs`. Just like how we get the secret key from configurations, let's also get the public key from configurations. So, we'll have this additional function in `lib/demo/google_recaptcha.ex`:
+
+```
+    def get_public_key() do
+      config = Application.get_env(:demo, :google_recaptcha)
+      config[:public_key]
+    end
+```
+
+We'll also have this in our `config/dev.secret.exs`:
+
+```
+    config :demo, :google_recaptcha,
+      public_key: "YOUR PUBLIC KEY",
+      secret: "SECRET"
+```
+
+Now inside our `render/1` function inside `lib/demo_web/live/contact_form_component.ex`, we have the element written out like below:
+
+```
+    <div
+      phx-hook="GoogleRecaptcha"
+      id="captcha-placeholder"
+      data-sitekey="{Demo.GoogleRecaptcha.get_public_key()}"
+    ></div>
+```
+
+We've done a good job, great! We have the function ready to verify the response token. Now inside our form componenet, inside `mount/1`, let's add a new value in assigns:
+
+```
+    def mount(socket) do
+      changeset = Demo.ContactSchema.changeset(%Demo.ContactSchema{}, %{})
+
+      {:ok,
+      assign(socket,
+        changeset: changeset,
+        show_recaptcha_error: false
+      )}
+    end
+```
+
+Let's use this value to show error when the user doesn't tick checkbox. In order to do that, let's add the following line in our HTML.
+
+```
+    <%= if @show_recaptcha_error do %>
+    <span class="invalid-feedback"> You need to have ticked the checkbox. Please try again </span>
+    <% end %>
+```
+
+If `show_recaptcha_error` is `true`, then the error will be visible. Now that we also have a provision to show the error, let's conditionally verify whether to show the error or not. Inside `lib/demo_web/live/contact_form_component.ex`, let's update the `handle_event/3`:
+
+```
+      def handle_event("send-email", %{"contact_schema" => contact_schema_attrs, "g-recaptcha-response" => g_recaptcha_response}, socket) do
+        changeset =
+          Demo.ContactSchema.changeset(%Demo.ContactSchema{}, contact_schema_attrs)
+          |> Map.put(:action, :validate)
+
+        # This line will give either false or true after verifying.
+        # The response from google recaptcha returns a parameter called "success". This by default returns false if no `value` is found.
+        verified = Demo.GoogleRecaptcha.verify(g_recaptcha_response) |> Map.get("success", false)
+
+        cond do
+          verified && changeset.valid? ->
+            {:noreply,
+            assign(socket, :show_recaptcha_error, false)
+            |> push_patch(to: "/", replace: true)
+            |> put_flash(:info, "Email sent")}
+
+          !changeset.valid? && !verified ->
+            {:noreply, assign(socket, changeset: changeset, show_recaptcha_error: true)}
+
+          !verified ->
+            {:noreply, assign(socket, changeset: changeset, show_recaptcha_error: true)}
+
+          !changeset.valid? ->
+            {:noreply, assign(socket, changeset: changeset)}
+        end
+      end
+```
+
+Amazing!! We have implemented Google reCAPTCHA v2 in a live view. You can try playing with the form now!
+
+## [](#closing-remarks)Closing remarks
+
+I hope you found it useful. Please feel free to comment for feedback, corrections and suggestions. You may see this complete demo in [Github](https://github.com/nittin-shankar/google-recaptcha-demo).
+
+Thank you for reading this article 😊

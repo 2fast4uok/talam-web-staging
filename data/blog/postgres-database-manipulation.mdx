@@ -1,0 +1,226 @@
+---
+title: 'Basic Manipulation of Database with PostgreSQL'
+date: '2022-02-09'
+tags: ['sql', 'postgres']
+authors: ['vikram']
+---
+
+## [](#database)Database
+
+### [](#what-is-a-database)What is a Database?
+
+**Database** is a collection of structured information in an organized form so that it is easier to understand. It is basically stored electronically in a computer system. The database is used to store, access and manage the information stored in the system.
+
+### [](#what-is-a-relational-database)What is a Relational Database?
+
+![Relational Database](https://static.studytonight.com/dbms/images/relational-dbms-model.png) It is a type of database which defines relationship between the tables which is stored in a system. These collection of data items are stored in a set of tables with columns and rows. These tables hold the information about the items to be represented in the database.
+
+### [](#what-is-a-dbms)What is a DBMS?
+
+Database Management System(DBMS) is a software which is used to manage a database. It provides an interface to perform various operations like creating, storing, updating and deleting the data in the database.
+
+### [](#what-is-sql)What is SQL?
+
+**SQL** is abbreviated as the **Structured Query Language**. It is a programming language which allows us to interact with it. It's syntax is easier to learn and it manages data held in a **Relational database.**
+
+### [](#what-is-a-database-engine)What is a Database Engine?
+
+**Database Engine** is a software component that a Database Management System (DBMS) uses to do CRUD operations on the data from the database. There are a lot of Database Engines like **PostgreSQL, ORACLE, MySQL, SQL Server.** In this article, we are going to use **PostgreSQL** as it is open source, and is powerful and has been in use for long period of time.
+
+Let's first understand **What is PostgreSQL?**
+
+**Postgres** is the actual database engine and **SQL** allows us to interact with database and helps us to modify it. **PostgreSQL** helps us to manipulate the database withease and for better understanding.
+
+To install PostgreSQL in Linux, click [here](https://www.postgresqltutorial.com/install-postgresql-linux/)
+
+To install PostgreSQL in Windows, click [here](https://www.postgresqltutorial.com/install-postgresql/)
+
+To install PostgreSQL in Windows, click [here](https://www.postgresqltutorial.com/install-postgresql-macos/)
+
+## [](#manipulation-of-database)Manipulation of Database
+
+### [](#creating-a-database)Creating a Database:
+
+Run the command in your terminal to open your **PostgreSQL** database with your username:
+
+```
+    $ psql
+    psql (14.0)
+    Type "help" for help.
+
+    testing=#
+```
+
+In my case, "testing" is my username.
+
+Create a Database by running the command in the PSQL server:
+
+```
+    CREATE DATABASE database_name;
+```
+
+If you want see the list of available database, run:
+
+```
+    testing=# \l
+
+
+       List of databases
+          Name       |  Owner   | Encoding | Collate | Ctype | Access privileges
+    -----------------+----------+----------+---------+-------+-------------------
+     template0       | system   | UTF8     | en_IN   | en_IN | =c/
+     template1       | system   | UTF8     | en_IN   | en_IN | =c/
+
+     testing         | system   | UTF8     | en_IN   | en_IN |
+     learn           | system   | UTF8     | en_IN   | en_IN |
+
+     userstories_dev | postgres | UTF8     | en_IN   | en_IN |
+    (4 rows)
+
+    testing=#
+```
+
+To change to the database you have created, use the command from your current database:
+
+### [](#altering-a-database)Altering a Database:
+
+Altering a database means we can change the name of the existing database, change it to a new user, set table space, reset etc.
+
+You cannot alter the database such as renaming and assign it to a new user from the database you want to alter. Change to another database using the command `\c database_name` and proceed with the changes.
+
+To alter a database, use the command:
+
+```
+    testing=# ALTER DATABASE learn RENAME TO learning;
+
+    ALTER DATABASE
+    testing=#
+```
+
+Use `\l` to list all database to check whether the changes have been made.
+
+There are a lot more commands which can be used in altering a database. To know more, click [here](https://www.w3resource.com/sql/sql-basic/basic-create-database.php).
+
+### [](#deleting-a-database)Deleting a Database:
+
+Deleting a database is not recommended when it is in production unless you have a backup. For experimental purposes and for learning we should learn to delete a database.
+
+You cannot delete a database that you are currently working on. Change to another database to proceed.
+
+To delete a database, run the following command in your database:
+
+```
+    testing=# DROP DATABASE learning;
+    DROP DATABASE
+    testing=#
+```
+
+### [](#creating-a-table-in-database)Creating a table in Database:
+
+A table is where the data is stored in a database. It is helpful in easier identification of data as the data is stored in columns and rows.
+
+To create a table without restrictions, run the following command in the database:
+
+```
+    CREATE TABLE table_name (
+        column_name1 datatype,
+        column_name2 datatype,
+        column_name3 datatype,
+       ....
+    );
+```
+
+In this table there are no restrictions which means you don't have to fill every column and some can be left empty.
+
+To create a table restrictions, run the following command in the database:
+
+```
+    CREATE TABLE table_name (
+        column_name1 DATATYPE CONSTRAINT,
+        column_name2 DATATYPE CONSTRAINT,
+        column_name3 DATATYPE CONSTRAINT,
+       ....
+    );
+```
+
+In this table there are some restrictions which means there are some rules we have follow when inserting data in the table. Ex. When restriction "NOT NULL" is given, it means that the column cannot not be left empty.
+
+To check whether the table has been created, use command `\d` which lists all the tables in the database.
+
+#### [](#insertion-of-data)Insertion of Data:
+
+You can insert data values to the columns you have created, use the following command to insert data:
+
+```
+    INSERT INTO table_name (column_name1,
+    column_name2,
+    column_name3,
+    ...)
+    VALUES (value1, value2, value3, ...);
+```
+
+"VALUES" are the data for the column in the specified order given.
+
+```
+    INSERT INTO table_name (first_name,
+    last_name,
+    age,
+    ...)
+    VALUES (John, Wick, 20, ...);
+```
+
+To list the table with the values, use the command `SELECT * FROM table_name;` where the `*` represents all. You can also give column_name in the place of `*` which will list only the specified column name. There are a lot a functions which can be used with `SELECT FROM`, click [here](https://intellipaat.com/blog/tutorial/sql-tutorial/sql-commands-cheat-sheet/)
+
+### [](#altering-the-table-in-the-database)Altering the table in the database:
+
+Altering the table is nothing but adding, dropping or modifiying column in the database. To add a column, run the command in the database:
+
+```
+    ALTER TABLE table_name
+    ADD(column_name1  DATATYPE,
+        column_name2 DATATYPE,
+        .....
+    );
+```
+
+To modify a column, run the command in the database:
+
+```
+    ALTER TABLE table_name
+    ALTER COLUMN column_name TYPE DATATYPE;
+```
+
+### [](#deleting-the-table-in-the-database)Deleting the table in the database:
+
+Deleting the table is not recommended unless you have backup. If you want delete the table, use the following command:
+
+```
+    DROP TABLE table_name;
+```
+
+However, you can also use another command to delete all the data inside the table using:
+
+```
+    DELETE FROM table_name;
+```
+
+#### [](#deleting-the-data-inside-the-table)Deleting the data inside the table:
+
+You can also delete a single row of data using the following command:
+
+```
+    DELETE FROM table_name WHERE condition;
+```
+
+Where the condition should be a `column_name='VALUE'`. We can also delete an entire column of data using the following command:
+
+```
+    ALTER TABLE table_name
+    DROP COLUMN column_name;
+```
+
+## [](#closing-remarks)Closing Remarks
+
+If you've found this article useful, please comment for feedback, corrections and suggestions.
+
+Thank you for reading this article...

@@ -1,0 +1,115 @@
+---
+title: 'Installing latest versions of Tailwind and AlpineJS for usage with Liveview'
+date: '2022-01-30'
+tags: ['tailwind', 'phoenix', 'live-view', 'alpine-js']
+authors: ['nittin']
+---
+
+My Elixir version is `1.13.2` and my Phoenix version is `1.6.6`. In this article, we're going to install Tailwind CSS and AlpineJS for usage with Liveview. Let's get started with first installing Tailwind.
+
+## [](#installing-tailwind-css)Installing Tailwind CSS
+
+Phoenix framework has an official [library](<(https://github.com/phoenixframework/tailwind)>) for installing tailwind. Let's first add it as a dependency in our `mix.exs`:
+
+```
+    defp deps do
+      [
+        {:tailwind, "~> 0.1", runtime: Mix.env() == :dev}
+      ]
+    end
+```
+
+After running `mix deps.get`, now inside our `config/config.exs`, we add the following configurations to use tailwind:
+
+```
+    config :tailwind,
+      version: "3.0.17",
+      default: [
+        args: ~w(
+          --config=tailwind.config.js
+          --input=css/app.css
+          --output=../priv/static/assets/app.css
+        ),
+        cd: Path.expand("../assets", __DIR__)
+      ]
+```
+
+In dev environment, we need to enable watch mode for live reload. So, inside the `watchers` section inside our `config/dev.exs`, we add:
+
+```
+      tailwind: {Tailwind, :install_and_run, [:default, ~w(--watch)]}
+```
+
+Now if we run `mix tailwind.install`, we would get the `assets/tailwind.config.js` for configs with Tailwind. we'll also get the `assets/app.css` loaded with extra lines for tailwind:
+
+```
+    @import 'tailwindcss/base';
+    @import 'tailwindcss/components';
+    @import 'tailwindcss/utilities';
+```
+
+Inside `assets/app.js`, one line will be removed out because we are using our own build pipeline for CSS.
+
+```
+    import "../css/app.css" ## This will be removed
+```
+
+In the dev environment, we could now add in Tailwind CSS classes anywhere in our HTML and it'll work(even in Liveview). It won't work once this is deployed and we can make it work by modifying our `mix assets.deploy` inside our `mix.exs`:
+
+```
+    defp aliases do
+      [
+        ...
+        "assets.deploy": ["tailwind default --minify", "esbuild default --minify", "phx.digest"]
+      ]
+    end
+```
+
+## [](#installing-alpinejs)Installing AlpineJS
+
+We should first install AlpineJS through `node.js`. Let's do that:
+
+```
+    cd assets
+    npm install alpinejs
+```
+
+Now, once we have installed AlpineJS, we need to configure it in our `assets/app.js`:
+
+```
+    import Alpine from 'alpinejs'
+    window.Alpine = Alpine
+    Alpine.start()
+```
+
+Please note that the lateset version of AlpineJS do not support es2016 or lower. So, in our `config/config.exs`, Inside `esbuild` configurations, we need to change the target from `es2016` to `es2017`:
+
+```
+    ...
+     args:
+      ~w(js/app.js --bundle --target=es2017 --outdir=../priv/static/assets --external:/fonts/* --external:/images/*)
+    ...
+```
+
+Great! Now we can write AlpineJS code in our HTML files! It won't work in Liveview as it's updating the pages every time a socket is changed. In order to make it work in Liveview, we need to add this following code when assigning `liveSocket`:
+
+```
+    let liveSocket = new LiveSocket('/live', Socket, {
+      params: {
+        _csrf_token: csrfToken,
+      },
+      dom: {
+        onBeforeElUpdated(from, to) {
+          if (from._x_dataStack) {
+            window.Alpine.clone(from, to)
+          }
+        },
+      },
+    })
+```
+
+## [](#closing-remarks)Closing remarks
+
+I hope you found this article useful. Please feel free to comment for feedback, corrections and suggestions.
+
+Thank you for reading this 😊
